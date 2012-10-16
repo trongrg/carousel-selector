@@ -18,7 +18,7 @@
   methods = {
     init: function(options, callback) {
       var settings;
-      options = (typeof options === 'ojbect') ? options : {};
+      options = (typeof options === 'object') ? options : {};
       callback = ($.isFunction(callback)) ? callback : function() {};
       callback  = ($.isFunction(options)) ? options : callback;
       settings = $.extend({}, defaults, options, internalData);
@@ -130,7 +130,7 @@
 
         $this.children(data.childSelector)
         .each(function(i) {
-          if (methods.updateChild.apply($this, [$(this), info, i, function() { $(this).trigger('ready');}])
+          if (methods.updateChild.apply($this, [$(this), info, function() { $(this).trigger('ready');}])
               && (!info.animating || data.lastAnimationStep)) {
                 inFocus = i;
                 $(this).addClass('carousel-selector-in-focus');
@@ -150,7 +150,7 @@
       });
     },
 
-    updateChild: function(childElement, info, childPos, callback) {
+    updateChild: function(childElement, info, callback) {
       var factors,
       $this = this,
       $child = $(childElement),
@@ -190,7 +190,7 @@
 
       $child.trigger('reposition');
       callback.apply($this);
-      return false;
+      return methods.isInFocus.apply($child, [pdata]);
     },
 
     stopAnimation: function() {
@@ -218,8 +218,7 @@
         var timer, newBearing,
         $this = $(this),
         data = $this.data('carousel-selector'),
-        thisDuration = (!duration) ? data.duration : duration,
-        thisEasingType = 'swing';
+        thisDuration = (!duration) ? data.duration : duration;
 
         if (!passedData) {
           passedData = {
@@ -244,12 +243,8 @@
 
           data.animating = true;
 
-          newBearing = $.easing[thisEasingType]((timer / passedData.totalTime), timer, passedData.start, bearing - passedData.start, passedData.totalTime);
+          newBearing = $.easing['swing']((timer / passedData.totalTime), timer, passedData.start, bearing - passedData.start, passedData.totalTime);
           console.log(newBearing);
-
-          if (methods.compareVersions.apply(null, [$().jquery, '1.7.2']) >= 0 && !($.easing['easeOutBack'])) {
-            newBearing = passedData.start + ((bearing - passedData.start) * newBearing);
-          }
 
           methods.setBearing.apply($this, [newBearing, function() {
             setTimeout(function() {
@@ -262,19 +257,19 @@
 
           methods.setBearing.apply($this, [bearing, function() {
             $this.trigger('animationEnd');
-            }]);
-            //update bearing, child in focus
-            $this.children(data.childSelector).each(function(){
-              $child = $(this);
-              cdata = $child.data('carousel-selector');
-              cdata.relativePos = methods.adjustRelativePosition.apply(null, [cdata.relativePos - bearing, data]);
-            });
-            data.childInFocus += bearing;
-            data.bearing = 0;
-            data.animating = false;
-            data.lastAnimationStep = false;
-
-            callback.apply($this);
+          }]);
+          //update bearing, child in focus
+          $this.children(data.childSelector).each(function(){
+            $child = $(this);
+            cdata = $child.data('carousel-selector');
+            cdata.relativePos = methods.adjustRelativePosition.apply(null, [cdata.relativePos - bearing, data]);
+          });
+          data.childInFocus += bearing;
+          data.bearing = 0;
+          methods.updateChildren.apply($this);
+          data.animating = false;
+          data.lastAnimationStep = false;
+          callback.apply($this);
         }
       });
 
@@ -300,41 +295,12 @@
       return this;
     },
 
-    compareVersions: function(baseVersion, compareVersion) {
-      var i,
-      base = baseVersion.split(/\./i),
-      compare = compareVersion.split(/\./i),
-      maxVersionSegmentLength = (base.length > compare.length) ? base.length : compare.length;
-
-      for (i = 0; i <= maxVersionSegmentLength; i++) {
-        if (base[i] && !compare[i] && parseInt(base[i], 10) !== 0) {
-          // base is higher
-          return 1;
-        } else if (compare[i] && !base[i] && parseInt(compare[i], 10) !== 0) {
-          // compare is higher
-          return -1;
-        } else if (base[i] === compare[i]) {
-          // these are the same, next
-          continue;
-        }
-
-        if (base[i] && compare[i]) {
-          if (parseInt(base[i], 10) > parseInt(compare[i], 10)) {
-            // base is higher
-            return 1;
-          } else {
-            // compare is higher
-            return -1;
-          }
-        }
-      }
-
-      // nothing was triggered, versions are the same
-      return 0;
-    },
-
     scroll: function(step){
       methods.animateToBearing.apply(this, [step]);
+    },
+
+    isInFocus: function(data){
+      return $(this).data('carousel-selector').relativePos == data.bearing;
     },
 
     isDisplayed: function(relativePos, data) {
@@ -342,17 +308,19 @@
     },
     adjustRelativePosition: function(relativePos, data) {
       if (relativePos < -data.childCount / 2)
-        return relativePos + data.childCount;
+        return (relativePos + data.childCount);
       else if (relativePos > data.childCount / 2)
-        return relativePos - data.childCount;
+        return (relativePos - data.childCount);
       else
         return relativePos;
     }
   };
   $.fn.carouselSelector = function(arguments) {
-    return methods.init.apply(this, arguments);
+    return methods.init.apply(this, [arguments]);
   };
   $.fn.carouselScroll = function(arguments) {
+    if (!$(this).data('carousel-selector'))
+      methods.init.apply(this);
     return methods.scroll.apply(this, [arguments]);
   };
 })(jQuery)
