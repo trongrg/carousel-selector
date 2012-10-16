@@ -5,8 +5,6 @@
     startBearing: 0,
     clickToFocus: true,
     clickToFocusCallback: function() {},
-    dropAnimateTo: 'nearest',
-    dragAxis: 'x',
     displayNumber: 5,
     duration: 600,
     minScale: 0.7,
@@ -15,8 +13,7 @@
   internalData = {
     animating: false,
     childInFocus: 0,
-    lastAnimationStep: false,
-    touchMoveStartBearing: null
+    lastAnimationStep: false
   };
   methods = {
     init: function(options, callback) {
@@ -29,13 +26,15 @@
       return this.each(function(){
         var $this = $(this),
         childCount = $this.children(settings.childSelector).length,
+        childHeight = $this.children(settings.childSelector).height(),
         startingChild = Math.floor(childCount/2),
         holderCSSBearing = ($this.css('position') !== 'static') ? $this.css('position') : 'relative';
 
         $this
         .css({
           padding: 0,
-          position: holderCSSBearing
+          position: holderCSSBearing,
+          height: settings.displayNumber * childHeight + 'px'
         })
         .addClass('carousel-selector')
         .data('carousel-selector', $.extend({}, settings, {
@@ -50,8 +49,7 @@
           .bind('click.carousel-selector', function() {
             methods.stopAnimation.apply($(this));
             if (!$this.data('carousel-selector').animating) {
-              var bearing = i - $this.data('carousel-selector').childInFocus;
-              methods.animateToBearing.apply($this, [bearing, $this.data('carousel-selector').clickToFocusCallback]);
+              methods.animateToBearing.apply($this, [$(this).data('carousel-selector').relativePos, $this.data('carousel-selector').clickToFocusCallback]);
             }
             return false;
           });
@@ -85,6 +83,7 @@
           startFontSize: start.fontSize,
           childNumber: i,
           currentScale: 1,
+          relativePos: i - data.childInFocus,
           parent: $this
         })
         .addClass('carousel-selector-item')
@@ -159,11 +158,10 @@
       pdata = $this.data('carousel-selector'),
       callback = callback || function() {};
 
-      relativePos = childPos - pdata.childInFocus - pdata.bearing;
-      if (relativePos < (-1 - pdata.displayNumber/2) || relativePos > (1 + pdata.displayNumber/2)) {
+      relativePos = methods.adjustRelativePosition.apply(null, [data.relativePos - pdata.bearing, pdata]);
+      if (!methods.isDisplayed.apply(null, [relativePos, pdata])){
         return;
       }
-
       factors = {}
       if (relativePos <= -1 || relativePos >= 1) {
         factors.scale = info.scale.min;
@@ -265,17 +263,16 @@
           methods.setBearing.apply($this, [bearing, function() {
             $this.trigger('animationEnd');
             }]);
-            //TODO update bearing, child in focus
-            //$this.children(data.childSelector).each(function(){
-            //$child = $(this);
-            //cdata = $child.data('carousel-selector');
-            //cdata.relativePosition += bearing;
-            //});
+            //update bearing, child in focus
+            $this.children(data.childSelector).each(function(){
+              $child = $(this);
+              cdata = $child.data('carousel-selector');
+              cdata.relativePos = methods.adjustRelativePosition.apply(null, [cdata.relativePos - bearing, data]);
+            });
             data.childInFocus += bearing;
             data.bearing = 0;
             data.animating = false;
             data.lastAnimationStep = false;
-            $this.data('carousel-selector', data);
 
             callback.apply($this);
         }
@@ -289,10 +286,8 @@
 
       this
       .each(function() {
-        var diff, lowerValue, higherValue,
-        $this = $(this),
-        data = $this.data('carousel-selector'),
-        oldBearing = data.bearing;
+        var $this = $(this),
+        data = $this.data('carousel-selector');
 
         // set bearing
         data.bearing = bearing;
@@ -340,8 +335,19 @@
 
     scroll: function(step){
       methods.animateToBearing.apply(this, [step]);
-    }
+    },
 
+    isDisplayed: function(relativePos, data) {
+      return (relativePos > (-1 - data.displayNumber/2) && relativePos < (1 + data.displayNumber/2));
+    },
+    adjustRelativePosition: function(relativePos, data) {
+      if (relativePos < -data.childCount / 2)
+        return relativePos + data.childCount;
+      else if (relativePos > data.childCount / 2)
+        return relativePos - data.childCount;
+      else
+        return relativePos;
+    }
   };
   $.fn.carouselSelector = function(arguments) {
     return methods.init.apply(this, arguments);
